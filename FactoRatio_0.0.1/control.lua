@@ -24,21 +24,26 @@ function getRecipe(tableIn) --Event pass a table into the function
 	-- local assemblers = math.ceil(Ops / recipe.unitsPerSecond)
 	-- player.print(assemblers)
 
-	recursivePrintAssemblers(recipe, Ops)
+	local assemblersTotal = {}
+	recursivePrintAssemblers(recipe, Ops, assemblersTotal)
 	-- player.print(serpent.block(recipe))
-
-
+	log(serpent.block(assemblersTotal))
 end
 
-function recursivePrintAssemblers(recipeTable, OpS)
+function recursivePrintAssemblers(recipeTable, OpS, assemblersTotal)
+	--Bootstrap
+	assemblersTotal = assemblersTotal or {}
+	
 	local assemblers = math.ceil(OpS / recipeTable.unitsPerSecond)
 	log(recipeTable.name .. " Assemblers: " .. assemblers)
+
+	assemblersTotal[recipeTable.name] = (assemblersTotal[recipeTable.name] or 0) + assemblers
 
 	for i = 1, #recipeTable.ingredientsTable, 1 do
 		local inputAmount = recipeTable.ingredients[i].amount
 		local inputPerSecond = (inputAmount / recipeTable.craftingTime) * assemblers
-		log(recipeTable.name .. " Input: " .. inputPerSecond .. " " .. recipeTable.ingredients[i].name .. " Per second")
-		recursivePrintAssemblers(recipeTable.ingredientsTable[i], inputPerSecond)
+		log(recipeTable.name .. " >Input: " .. inputPerSecond .. " " .. recipeTable.ingredients[i].name .. " Per second")
+		recursivePrintAssemblers(recipeTable.ingredientsTable[i], inputPerSecond, assemblersTotal)
 	end
 end
 
@@ -98,6 +103,23 @@ end
 
 commands.add_command("get-recipe", "A placefolder for building up to bigger things", getRecipe)
 
+--- Scrape every recipe from the loaded game instance and dump into a table that can be loaded for IDE testing.
+function dumpRecipesSnapshot()
+	local exported = {}
+	for name, recipe in pairs(prototypes.recipe) do
+		exported[name] = {
+			name = recipe.name,
+			ingredients = recipe.ingredients,
+			products = recipe.products,
+			energy = recipe.energy
+		}
+	end
+
+	local fileContent = "return " .. serpent.block(exported, {comment = false})
+
+	helpers.write_file("recipe_capture.lua", fileContent, false)
+end
+commands.add_command("dumpRecipes", "A placefolder for building up to bigger things", dumpRecipesSnapshot)
 
 --[[
 LuaGameScript Documentation:
