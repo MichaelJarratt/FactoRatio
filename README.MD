@@ -30,7 +30,6 @@ I want the mod to have two aspects, first a pretty-printed console output, secon
 *only signifcant changes logged here*
 
 ## 08/06/2026 - Pretty Printed Output
-- [ ] Mercury
 >Significant updated to the way trees are build and structures, now there is less waste and the tree is easier to navigate.
 >Formatted the output to pretty print, see below.
 >```
