@@ -71,19 +71,31 @@ function buildRecipeTree(--[[requred]]itemName, --[[optional]]treeDepth)
 
 	--Recursively build tree of recipes
 	for index, ingredientRecipe in ipairs(recipe.ingredients) do
-		local temp = buildRecipeTree(ingredientRecipe.name, treeDepth)
-		
-		if temp ~= nil then
-		--Number of ingredients to craft one item of parent recipe
-		temp["amount"] = ingredientRecipe.amount
+		---leaf nodes are the base case of this recursion
+		---They do not get converted into the custom table format and instead given some additional index and left as presented by the game engine
+		if not checkAndHandleLeafNode(ingredientRecipe, treeDepth) then
+			local temp = buildRecipeTree(ingredientRecipe.name, treeDepth)
+			-- Number of ingredients to craft one item of parent recipe
+			temp["amount"] = ingredientRecipe.amount
 			recipe.ingredients[index] = temp
-		else
-			recipe.ingredients[index][KEY_BASE_RESOURCE] = true
-			recipe.ingredients[index][KEY_TREE_DEPTH] = treeDepth + 1
 		end
 	end
 
 	return recipe;
+end
+
+---Checks if the recipe table is a leaf node, if so, flags it as such.
+---@param recipeTable table 
+---@param parentTreeDepth integer --how deeply nested the parent node is
+---@return boolean --true if table represents a leaf node, fasle if it is a branch node.
+function checkAndHandleLeafNode(recipeTable, parentTreeDepth)
+	if prototypes.recipe[recipeTable.name] ~= nil then
+		return false
+	else
+		recipeTable[KEY_BASE_RESOURCE] = true
+		recipeTable[KEY_TREE_DEPTH] = parentTreeDepth + 1
+		return true
+	end
 end
 
 function calculateRatios(recipe, outputPerSecond)
@@ -130,6 +142,9 @@ function printAssemblers(recipe)
 end
 
 --https://lua-api.factorio.com/stable/classes/LuaRecipePrototype.html
+---Convert a LuaRecipePrototype into a table
+---@param luaRecipePrototype luaRecipePrototype
+---@return table
 function recipeToTable(luaRecipePrototype)
 
 	log("converting prototype to table: " .. luaRecipePrototype.name)
@@ -140,65 +155,6 @@ function recipeToTable(luaRecipePrototype)
 		products = luaRecipePrototype.products,
 		ingredients = luaRecipePrototype.ingredients,
 	}
-
-	--Calculate recipe data
-	--recipe["unitsPerSecond"] = recipe.products[1]["amount"] / recipe.craftingTime
-	--table.insert(recipe, "unitsPerSecond", recipe.products[1]["amount"] / recipe.craftingTime)
-
-	return recipe
-end
-
-
-function recursivePrintAssemblers(recipeTable, OpS, assemblersTotal)
-	--Bootstrap
-	assemblersTotal = assemblersTotal or {}
-	
-	local assemblers = math.ceil(OpS / recipeTable.unitsPerSecond)
-	log(recipeTable.name .. " Assemblers: " .. assemblers)
-
-	assemblersTotal[recipeTable.name] = (assemblersTotal[recipeTable.name] or 0) + assemblers
-
-	for i = 1, #recipeTable.ingredientsTable, 1 do
-		local inputAmount = recipeTable.ingredients[i].amount
-		local inputPerSecond = (inputAmount / recipeTable.craftingTime) * assemblers
-		log(recipeTable.name .. " >Input: " .. inputPerSecond .. " " .. recipeTable.ingredients[i].name .. " Per second")
-		recursivePrintAssemblers(recipeTable.ingredientsTable[i], inputPerSecond, assemblersTotal)
-	end
-end
-
-function getRecipeTable2(itemName)
-	log("Searching for item " .. itemName)
-	local luaRecipePrototype = prototypes.recipe[itemName]
-	if luaRecipePrototype ~= nil then
-		local recipe = recipeToTable(luaRecipePrototype)
-		return recipe
-	else
-		log("No Recipe for item: " .. itemName)
-	end
-	--log(serpent.block(recipe))
-end
-
---https://lua-api.factorio.com/stable/classes/LuaRecipePrototype.html
-function recipeToTable2(luaRecipePrototype)
-
-	log("converting prototype to table: " .. luaRecipePrototype.name)
-	--Create table from luaRecipePrototype
-	local recipe = {
-		name = luaRecipePrototype.name,
-		craftingTime = luaRecipePrototype.energy,
-		products = luaRecipePrototype.products,
-		unitsPerSecond = 0,
-		ingredients = luaRecipePrototype.ingredients,
-		ingredientsTable = {}
-	}
-
-	--Calculate recipe data
-	recipe.unitsPerSecond = recipe.products[1]["amount"] / recipe.craftingTime
-
-	for _, ingredient in pairs(recipe.ingredients) do
-		local ingredientRecipe = getRecipeTable(ingredient.name)
-		table.insert(recipe.ingredientsTable, ingredientRecipe)
-	end
 
 	return recipe
 end
