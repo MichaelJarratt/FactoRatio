@@ -30,7 +30,7 @@ I want the mod to have two aspects, first a pretty-printed console output, secon
 *only signifcant changes logged here*
 
 ## 08/06/2026 - Pretty Printed Output
->Significant updated to the way trees are build and structures, now there is less waste and the tree is easier to navigate.
+>Significantly updated the way trees are built and structured, now there is less waste and the tree is easier to navigate.<br>
 >Formatted the output to pretty print, see below.
 >```
 > iron-gear-wheel Assemblers: 1
@@ -41,9 +41,10 @@ I want the mod to have two aspects, first a pretty-printed console output, secon
 >- [ ] Display flattened output under the tree. e.g. total number of assemblers / smelters of each type
 >- [ ] Name producers appropriately for the recipe. e.g. iron-plate should be displayed as being produced by furnaces
 >- [ ] Display number of drills required to achieve the required raw resource input
+>- [ ] Handle configurations, like assembler level / modules, stone/steel/electric furnace etc..
 >- [ ] Handle advanced oil processing *
 >
->\* Because of the way recipe search is implemented (looking for the name of the item in prototypes.recipe), advanced oil processing products are found to have "no recipe" and are treated as a base resource (e.g. ores, crude oil, water). There are probably other recipes that are affected this way.
+>\* Because of the way recipe search is implemented (looking for the name of the item in prototypes.recipe), `advanced-oil-processing` products are found to have "no recipe" and are treated as a base resource (e.g. ores, crude oil, water). There are probably other recipes that are affected this way.
 
 ## 07/06/2026 - MVP
 >Created mod MVP.
