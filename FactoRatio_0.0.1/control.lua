@@ -10,36 +10,17 @@ KEY_TREE_DEPTH="treeDepth"
 --End Constants
 
 function getRecipe(tableIn) --Event pass a table into the function
-
-	--game.get_player() returns a LuaPlayer object
-	--local player = game.get_player(tableIn.player_index)
-
 	local itemName, Ops = parseParameters(tableIn.parameter)
 
-	--print a message to just the player who sent it
-	--player.print("Searching for item " .. itemName .." Per second: " .. Ops)
+	local luaRecipePrototype = prototypes.recipe[itemName]
+	if luaRecipePrototype == nil then
+		log("No recipe found for item: "..itemName)		
+	end
 
-	--Recursively builds a data structure Recipe, unitsPerSecond (for one assembler) and ingredient recipes
-	local recipe = getRecipeTable(itemName)
-	log(serpent.block(recipe))
+	local temp = recipeToTable(luaRecipePrototype)
+	-- temp1[KEY_TREE_DEPTH] = 0
+	buildRecipeTree(temp, 0)
 
-	--Calculate recipe ratios
-
-	--Output Assemblers
-	--Some recipes have multiple products (e.g. advanced oil processing) so products is an array
-	--local assemblers = math.ceil(Ops / recipe.unitsPerSecond)
-	--player.print(assemblers)
-
-	local assemblersTotal = {}
-	recursivePrintAssemblers(recipe, Ops, assemblersTotal)
-	--player.print(serpent.block(recipe))
-	log(serpent.block(assemblersTotal))
-end
-
-function getRecipe2(tableIn) --Event pass a table into the function
-	local itemName, Ops = parseParameters(tableIn.parameter)
-
-	local temp = buildRecipeTree(itemName)
 	calculateRatios(temp, Ops)
 
 	log(serpent.block(temp))
@@ -47,54 +28,33 @@ function getRecipe2(tableIn) --Event pass a table into the function
 	printAssemblers(temp)
 end
 
----Takes the name of a craftable item and builds a tree of all child recipes.
----This function will also calculate the number of units produced per second by one assembler (assuming a crafting speed of 1), which is important to calculating assembler ratios later.
----@param itemName string
----@param treeDepth integer [optional] Counter of how deeply nested a recipe is in the tree
----@return table
-function buildRecipeTree(--[[requred]]itemName, --[[optional]]treeDepth)
-	--bootstrap
-	treeDepth = treeDepth or 0
-	
-	--get game engine recipe object
-	local luaRecipePrototype = prototypes.recipe[itemName]
-	if luaRecipePrototype == nil then
-		return nil
-	end
-
-	--If object was found, convert to our table format
-	local recipe = recipeToTable(luaRecipePrototype)
-
-	--Handle tree depth
-	recipe[KEY_TREE_DEPTH] = treeDepth
+---Takes a recipe table and recursively builds a tree of all child recipes
+---@param recipeTable table --this table is modified
+---@param treeDepth integer --[optional] Counter of how deeply nested a recipe is in the tree
+function buildRecipeTree(--[[requred]]recipeTable, --[[optional]]treeDepth)
+	--handle tree depth
+	recipeTable[KEY_TREE_DEPTH] = treeDepth
 	treeDepth = treeDepth + 1 --increment treeDepth for the next nested layer
 
-	--Recursively build tree of recipes
-	for index, ingredientRecipe in ipairs(recipe.ingredients) do
-		---leaf nodes are the base case of this recursion
-		---They do not get converted into the custom table format and instead given some additional index and left as presented by the game engine
-		if not checkAndHandleLeafNode(ingredientRecipe, treeDepth) then
-			local temp = buildRecipeTree(ingredientRecipe.name, treeDepth)
-			-- Number of ingredients to craft one item of parent recipe
-			temp["amount"] = ingredientRecipe.amount
-			recipe.ingredients[index] = temp
-		end
-	end
-
-	return recipe;
-end
-
----Checks if the recipe table is a leaf node, if so, flags it as such.
----@param recipeTable table 
----@param parentTreeDepth integer --how deeply nested the parent node is
----@return boolean --true if table represents a leaf node, fasle if it is a branch node.
-function checkAndHandleLeafNode(recipeTable, parentTreeDepth)
-	if prototypes.recipe[recipeTable.name] ~= nil then
-		return false
-	else
+	--get Recipe information for item
+	--This is a problem. Base resources are not copied and so return the same table reference, meaning every "instance" shares the same table depth and quantities
+	--This is only a problem for IDE testing, seem that in-game this returns a unique table each time
+	local itemRecipe = prototypes.recipe[recipeTable.name]
+	
+	--leaf node
+	if itemRecipe == nil then
 		recipeTable[KEY_BASE_RESOURCE] = true
-		recipeTable[KEY_TREE_DEPTH] = parentTreeDepth + 1
-		return true
+		recipeTable[KEY_TREE_DEPTH] = treeDepth
+		return
+	end
+	--copy recipe information into table
+	recipeTable["craftingTime"] = itemRecipe["energy"]
+	recipeTable["products"] = itemRecipe["products"]
+	recipeTable["ingredients"] = itemRecipe["ingredients"]
+
+	--Recursively build tree of recipes
+	for index, ingredientRecipe in ipairs(recipeTable.ingredients) do
+		buildRecipeTree(ingredientRecipe, treeDepth)
 	end
 end
 
@@ -124,13 +84,15 @@ function printAssemblers(recipe)
 
 	local formatted
 
-	--leaf node. Does not have a recipe, so does not have any numbe of assemblers
+	--leaf node. Does not have a recipe, so does not have any number of assemblers
 	if recipe[KEY_BASE_RESOURCE] ~= nil then
-		formatted = padding..recipe["name"].." units /s "..recipe["inputPerSecond"]
+		formatted = padding..recipe["name"].." units /s "..recipe["totalInputPerSecond"].." ("..recipe["inputPerSecond"].." per producer)"
 		log(formatted)
 		return
-	else
+	elseif recipe["totalInputPerSecond"] ~= nil then --Branch Node
 		-- local formatted = string.format("%s%s%s", padding, recipe[KEY_ASSEMBLERS])
+		formatted = padding..recipe["name"].." Assemblers: "..recipe.assemblers.." (Producing "..recipe["totalInputPerSecond"].." per second, or "..recipe["inputPerSecond"].." per assembler)"
+	else
 		formatted = padding..recipe["name"].." Assemblers: "..recipe.assemblers
 	end
 

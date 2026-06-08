@@ -33,5 +33,4 @@ factoRatio = require("control")
 -- print(serpent.block(accumulator, {metatostring=false}))
 
 -- No namespacing, the function is now just available to be called.
--- getRecipe2({parameter="utility-science-pack"})
-getRecipe2({parameter="utility-science-pack"})
+getRecipe({parameter="accumulator"})
