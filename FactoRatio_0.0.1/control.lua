@@ -23,9 +23,11 @@ function getRecipe(tableIn) --Event pass a table into the function
 
 	calculateRatios(temp, Ops)
 
-	log(serpent.block(temp))
+	-- log(serpent.block(temp))
 
-	printAssemblers(temp)
+	-- printAssemblers(temp)
+
+	log(formatAssemblers(temp))
 end
 
 ---Takes a recipe table and recursively builds a tree of all child recipes
@@ -102,6 +104,72 @@ function printAssemblers(recipe)
 		printAssemblers(ingredientRecipe)
 	end
 end
+
+-- TODO: pass a table (be reference) and use it as a map to count the total number of each resource / assembler
+function formatAssemblers(--[[requred]]recipe)
+	local formatted
+
+	local padding = string.rep(" ", recipe[KEY_TREE_DEPTH])
+
+	--Process this recipe
+	--Root node. The root node does not input into anything, so does not have a "totanInputPerSecond"
+	if recipe["totalInputPerSecond"] == nil then
+		formatted = padding..recipe["name"].." Assemblers: "..recipe.assemblers.."\n"
+	--Branch node. Inputs into parent recipe and has its own input recipes.
+	elseif recipe[KEY_BASE_RESOURCE] == nil then
+		formatted = padding..recipe["name"].." Assemblers: "..recipe.assemblers.." (Producing "..recipe["totalInputPerSecond"].." per second, or "..recipe["inputPerSecond"].." per assembler)".."\n"
+	--Leaf node. Does not have a recipe, so does not have any number of assemblers
+	else
+		formatted = padding..recipe["name"].." units /s "..recipe["totalInputPerSecond"].." ("..recipe["inputPerSecond"].." per producer)".."\n"
+	end
+
+	---Process children
+	---table.index being nil is falsy, inversely table.index having a value is truthy.
+	---If not a leaf node, recursively call upon input recipes
+	if recipe.ingredients then
+		for _, ingredientRecipe in pairs(recipe.ingredients) do
+			formatted = formatted..formatAssemblers(ingredientRecipe)
+		end
+	end
+
+	return formatted
+end
+
+
+function formatAssemblersOG(--[[requred]]recipe, --[[optional]]outString)
+	--bootstrap
+	outString = outString or ""
+	
+	local padding = string.rep("  ", recipe[KEY_TREE_DEPTH])
+
+	local formatted
+
+	--leaf node. Does not have a recipe, so does not have any number of assemblers
+	if recipe[KEY_BASE_RESOURCE] ~= nil then
+		formatted = padding..recipe["name"].." units /s "..recipe["totalInputPerSecond"].." ("..recipe["inputPerSecond"].." per producer)".."\n"
+	elseif recipe["totalInputPerSecond"] ~= nil then --Branch Node
+		-- local formatted = string.format("%s%s%s", padding, recipe[KEY_ASSEMBLERS])
+		formatted = padding..recipe["name"].." Assemblers: "..recipe.assemblers.." (Producing "..recipe["totalInputPerSecond"].." per second, or "..recipe["inputPerSecond"].." per assembler)".."\n"
+	else
+		formatted = padding..recipe["name"].." Assemblers: "..recipe.assemblers.."\n"
+	end
+
+	outString = outString..formatted
+
+	local children = ""
+	for _, ingredientRecipe in pairs(recipe.ingredients or {}) do
+		children=children..formatAssemblers(ingredientRecipe)
+	end
+	outString = outString..children
+
+	return outString
+end
+
+-- if recipe.ing then
+-- 	for _, ingredientRecipe in ipairs(recipe.ingredients) do
+-- 			outString = outString..formatAssemblers(ingredientRecipe, outString)
+-- 		end
+-- 	end
 
 --https://lua-api.factorio.com/stable/classes/LuaRecipePrototype.html
 ---Convert a LuaRecipePrototype into a table
