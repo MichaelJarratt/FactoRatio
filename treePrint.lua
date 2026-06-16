@@ -103,51 +103,62 @@ function formatDepTree_old(args)
     return args.tableOut
 end
 
---This attempt is as above, but it is building a list of symbols, which will later be rendered into strings.
---THIS ONE WORKS
+---Takes a recipe tree and returns a table of strings which amount to a pretty-printed representation of the input tree.
+---
+---<b>Implementation notes:</b>
+---
+---The formatted output is treated like a grid, where the symbols and recipe strings occupy rows and columns, 
+---though only the columns positions are counted.
+---
+---A node will build up the horizontal list of symbols leading up to its string, then compile the whole line into a string. <br>
+---It will then, before resursively calling upon its children, set the symbol in it's column (treeDepth) on the row beneath it.
+---@param args any {recipe=inputRecipe,}
+---@return table formattedTable Table of formatted output. The table is in the correct print order and can be iterated over and printed.
 function formatDepTree(args)
     --bootstrap / extract args
     args.tableOut = args.tableOut or {}
     --Represents what symbol to place in each depth column
     args.depthSymbols = args.depthSymbols or {}
-    local currentRecipe = args.recipe
-    local currentDepth = currentRecipe.treeDepth
+    local thisNodeRecipe = args.recipe
+    local thisNodeDepth = thisNodeRecipe.treeDepth
 
     --Create a list of symbols which will later be rendered into a string
-    local line = {}
-    for depth=1, currentRecipe.treeDepth-1, 1 do
+    local lineSymbols = {}
+    ---Iterate up to the depth of this node
+    for depth=1, thisNodeDepth-1, 1 do
         local depthSymbol = args.depthSymbols[depth]
-        --Symbol assigned to the depth of this node is respected
-        if depth == currentDepth-1 then
-            line[depth] = depthSymbol
-        --Calculate what symbol should be at this depth (deducing from the previous assignment)
-        else
-            --If the parent recipe is a middle child, then there must be a continuation line beneath it
-            if depthSymbol == S_CHILD then
-                line[depth] = S_CONT
-            --If the parent recipe is a leaf child, then there must be empty space beneath it
-            elseif depthSymbol == S_LEAF then
-                line[depth] = S_EMPTY
+
+        --Symbol assigned to this node is respected
+        if depth == thisNodeDepth-1 then
+            lineSymbols[depth] = depthSymbol
+        else--Calculate what symbol should be at this depth on this line
+            if depthSymbol == S_CHILD then--If the parent recipe is a middle child, then there must be a continuation line beneath it
+                lineSymbols[depth] = S_CONT
+            elseif depthSymbol == S_LEAF then--If the parent recipe is a leaf child, then there must be empty space beneath it
+                lineSymbols[depth] = S_EMPTY
             end
         end
     end
 
     --Render the line into a string
     local lineStr = ""
-    for _, symbol in ipairs(line) do
+    for _, symbol in ipairs(lineSymbols) do
         lineStr = lineStr..symbol
     end
-    lineStr = lineStr..currentRecipe.name
+    lineStr = lineStr..thisNodeRecipe.name
 
-
+    ---Put rendered line into the output table.
+    ---As the tree is traversed depth-first the order of insertion will be the correct rendering order
     table.insert(args.tableOut, lineStr)
     
-    for index, inputRecipe in ipairs(args.recipe.ingredients or {}) do
-        local isLastChild = index == #args.recipe.ingredients
+    ---Iterate over inputs recipes
+    ---Set the appropraite symbol for the child before doing a recursive call on it
+    for index, inputRecipe in ipairs(thisNodeRecipe.ingredients or {}) do
+        local isLastChild = index == #thisNodeRecipe.ingredients
         if isLastChild then
-            args.depthSymbols[args.recipe["treeDepth"]]="\\- "
+            args.depthSymbols[thisNodeDepth]="\\- "
         else --middle child
-            args.depthSymbols[args.recipe["treeDepth"]]="+- "
+            args.depthSymbols[thisNodeDepth]="+- "
         end
 
         formatDepTree({recipe=inputRecipe, tableOut=args.tableOut, depthSymbols = args.depthSymbols})
