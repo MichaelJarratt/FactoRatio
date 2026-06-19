@@ -3,10 +3,19 @@
 
 --https://jackhugh.github.io/factorio-data-raw-visualiser/
 
+--custom meta tables
+require("metatables")
+
 --Constants
 KEY_BASE_RESOURCE="baseResource"
 KEY_ASSEMBLERS="assemblers"
 KEY_TREE_DEPTH="treeDepth"
+
+--Dependency Tree Symbol Constants
+S_EMPTY="   "
+S_CHILD="+- "
+S_LEAF="\\- "
+S_CONT ="|  "
 --End Constants
 
 function getRecipe(tableIn) --Event pass a table into the function
@@ -18,8 +27,9 @@ function getRecipe(tableIn) --Event pass a table into the function
 	end
 
 	local temp = recipeToTable(luaRecipePrototype)
+	addRecipeMetaTable(temp)
 	-- temp1[KEY_TREE_DEPTH] = 0
-	buildRecipeTree(temp, 0)
+	buildRecipeTree(temp, 1)
 
 	calculateRatios(temp, Ops)
 
@@ -27,7 +37,13 @@ function getRecipe(tableIn) --Event pass a table into the function
 
 	-- printAssemblers(temp)
 
-	log(formatAssemblers(temp))
+	-- log(formatAssemblers(temp))
+
+	local dependencyTree = formatDepTree({recipe = temp})
+
+	for index, value in ipairs(dependencyTree) do
+    	log(value)
+	end
 end
 
 ---Takes a recipe table and recursively builds a tree of all child recipes
@@ -37,6 +53,7 @@ function buildRecipeTree(--[[requred]]recipeTable, --[[optional]]treeDepth)
 	--handle tree depth
 	recipeTable[KEY_TREE_DEPTH] = treeDepth
 	treeDepth = treeDepth + 1 --increment treeDepth for the next nested layer
+	addRecipeMetaTable(recipeTable)
 
 	--get Recipe information for item
 	--This is a problem. Base resources are not copied and so return the same table reference, meaning every "instance" shares the same table depth and quantities
@@ -46,7 +63,7 @@ function buildRecipeTree(--[[requred]]recipeTable, --[[optional]]treeDepth)
 	--leaf node
 	if itemRecipe == nil then
 		recipeTable[KEY_BASE_RESOURCE] = true
-		recipeTable[KEY_TREE_DEPTH] = treeDepth
+		recipeTable[KEY_TREE_DEPTH] = treeDepth -1
 		return
 	end
 	--copy recipe information into table
@@ -83,7 +100,6 @@ end
 
 function printAssemblers(recipe)
 	local padding = string.rep("  ", recipe[KEY_TREE_DEPTH])
-
 	local formatted
 
 	--leaf node. Does not have a recipe, so does not have any number of assemblers
@@ -108,7 +124,7 @@ end
 -- TODO: pass a table (be reference) and use it as a map to count the total number of each resource / assembler
 function formatAssemblers(--[[requred]]recipe)
 	local formatted
-
+	log(recipe:format())
 	local padding = string.rep(" ", recipe[KEY_TREE_DEPTH])
 
 	--Process this recipe
@@ -139,7 +155,7 @@ end
 function formatAssemblersOG(--[[requred]]recipe, --[[optional]]outString)
 	--bootstrap
 	outString = outString or ""
-	
+	log(getmetatable(recipe).__formatRecipeString())
 	local padding = string.rep("  ", recipe[KEY_TREE_DEPTH])
 
 	local formatted
@@ -165,6 +181,70 @@ function formatAssemblersOG(--[[requred]]recipe, --[[optional]]outString)
 	return outString
 end
 
+---Takes a recipe tree and returns a table of strings which amount to a pretty-printed representation of the input tree.
+---
+---<b>Implementation notes:</b>
+---
+---The formatted output is treated like a grid, where the symbols and recipe strings occupy rows and columns, 
+---though only the columns positions are counted.
+---
+---A node will build up the horizontal list of symbols leading up to its string, then compile the whole line into a string. <br>
+---It will then, before resursively calling upon its children, set the symbol in it's column (treeDepth) on the row beneath it.
+---@param args any {recipe=inputRecipe}
+---@return table formattedTable Table of formatted output. The table is in the correct print order and can be iterated over and printed.
+function formatDepTree(args)
+    --bootstrap / extract args
+    args.tableOut = args.tableOut or {}
+    --Represents what symbol to place in each depth column
+    args.depthSymbols = args.depthSymbols or {}
+    local thisNodeRecipe = args.recipe
+    local thisNodeDepth = thisNodeRecipe.treeDepth
+
+    --Create a list of symbols which will later be rendered into a string
+    local lineSymbols = {}
+    ---Iterate up to the depth of this node
+    for depth=1, thisNodeDepth-1, 1 do
+        local depthSymbol = args.depthSymbols[depth]
+
+        --Symbol assigned to this node is respected
+        if depth == thisNodeDepth-1 then
+            lineSymbols[depth] = depthSymbol
+        else--Calculate what symbol should be at this depth on this line
+            if depthSymbol == S_CHILD then--If the parent recipe is a middle child, then there must be a continuation line beneath it
+                lineSymbols[depth] = S_CONT
+            elseif depthSymbol == S_LEAF then--If the parent recipe is a leaf child, then there must be empty space beneath it
+                lineSymbols[depth] = S_EMPTY
+            end
+        end
+    end
+
+    --Render the line into a string
+    local lineStr = ""
+    for _, symbol in ipairs(lineSymbols) do
+        lineStr = lineStr..symbol
+    end
+    lineStr = lineStr..thisNodeRecipe:format()
+
+    ---Put rendered line into the output table.
+    ---As the tree is traversed depth-first the order of insertion will be the correct rendering order
+    table.insert(args.tableOut, lineStr)
+    
+    ---Iterate over inputs recipes
+    ---Set the appropraite symbol for the child before doing a recursive call on it
+    for index, inputRecipe in ipairs(thisNodeRecipe.ingredients or {}) do
+        local isLastChild = index == #thisNodeRecipe.ingredients
+        if isLastChild then
+            args.depthSymbols[thisNodeDepth]="\\- "
+        else --middle child
+            args.depthSymbols[thisNodeDepth]="+- "
+        end
+
+        formatDepTree({recipe=inputRecipe, tableOut=args.tableOut, depthSymbols = args.depthSymbols})
+    end
+
+    return args.tableOut
+end
+
 -- if recipe.ing then
 -- 	for _, ingredientRecipe in ipairs(recipe.ingredients) do
 -- 			outString = outString..formatAssemblers(ingredientRecipe, outString)
@@ -176,6 +256,10 @@ end
 ---@param luaRecipePrototype luaRecipePrototype
 ---@return table
 function recipeToTable(luaRecipePrototype)
+
+	if luaRecipePrototype == nil then
+		return nil
+	end
 
 	log("converting prototype to table: " .. luaRecipePrototype.name)
 	--Create table from luaRecipePrototype
